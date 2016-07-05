@@ -3,12 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
-	"os"
 	"strings"
 	"time"
 
-	mp "github.com/mackerelio/go-mackerel-plugin"
+	mp "github.com/mackerelio/go-mackerel-plugin-helper"
 	"github.com/mackerelio/mackerel-agent/logging"
 	redis "gopkg.in/redis.v4"
 )
@@ -29,7 +27,7 @@ var (
 		},
 		ChannelName: "test",
 		Message:     "Publish message",
-		Prefix:      "latency",
+		Prefix:      "redis.pubsub.latency",
 	}
 )
 
@@ -43,60 +41,49 @@ type RedisPlugin struct {
 	Tempfile    string
 }
 
-func (m RedisPlugin) calculateCapacity(pub, sub *redis.Client, stat map[string]float64) error {
-	subscribe, err := sub.Subscribe(m.ChannelName)
-	if err != nil {
-		logger.Errorf("Failed to subscribe. %s", err)
-		return err
-	}
-	defer subscribe.Close()
-	if _, err := pub.Publish(m.ChannelName, m.Message).Result(); err != nil {
-		logger.Errorf("Failed to publish. %s", err)
-		return err
-	}
-	start := time.Now()
-	if _, err := subscribe.ReceiveMessage(); err != nil {
-		log.Fatal(err)
-	}
-	duration := time.Now().Sub(start)
-
-	stat["latency"] = float64(duration) / float64(time.Microsecond)
-	return nil
-}
-
 // FetchMetrics interface for mackerelplugin
-func (m RedisPlugin) FetchMetrics() (map[string]float64, error) {
+func (m RedisPlugin) FetchMetrics() (map[string]interface{}, error) {
+
 	pubClient := redis.NewClient(&m.PubRedisOpt)
 	subClient := redis.NewClient(&m.SubRedisOpt)
 
-	stat := make(map[string]float64)
-
-	if _, ok := stat["latency"]; !ok {
-		stat["latency"] = 0
+	subscribe, err := subClient.Subscribe(m.ChannelName)
+	if err != nil {
+		logger.Errorf("Failed to subscribe. %s", err)
+		return nil, err
 	}
-
-	if err := m.calculateCapacity(pubClient, subClient, stat); err != nil {
+	defer subscribe.Close()
+	if _, err := pubClient.Publish(m.ChannelName, m.Message).Result(); err != nil {
+		logger.Errorf("Failed to publish. %s", err)
+		return nil, err
+	}
+	start := time.Now()
+	if _, err := subscribe.ReceiveMessage(); err != nil {
 		logger.Infof("Failed to calculate capacity. (The cause may be that AWS Elasticache Redis has no `CONFIG` command.) Skip these metrics. %s", err)
+		return nil, err
 	}
+	duration := time.Now().Sub(start)
 
-	return stat, nil
+	return map[string]interface{}{m.metricName(): float64(duration) / float64(time.Microsecond)}, nil
+
+}
+
+func (m RedisPlugin) metricName() string {
+	return strings.Replace(strings.Replace(m.SubRedisOpt.Addr, ".", "_", -1), ":", "-", -1)
 }
 
 // GraphDefinition interface for mackerelplugin
 func (m RedisPlugin) GraphDefinition() map[string](mp.Graphs) {
 	labelPrefix := strings.Title(m.Prefix)
-
-	var graphdef = map[string](mp.Graphs){
-		(m.Prefix + ".latency"): mp.Graphs{
-			Label: (labelPrefix + " Latency"),
-			Unit:  "integer",
+	return map[string](mp.Graphs){
+		m.Prefix: mp.Graphs{
+			Label: labelPrefix,
+			Unit:  "float",
 			Metrics: [](mp.Metrics){
-				mp.Metrics{Name: "latency", Label: "Latency", Diff: false},
+				mp.Metrics{Name: m.metricName(), Label: m.SubRedisOpt.Addr},
 			},
 		},
 	}
-
-	return graphdef
 }
 
 func main() {
@@ -115,15 +102,9 @@ func main() {
 
 	helper := mp.NewMackerelPlugin(redisParam)
 
-	if *optTempfile != "" {
-		helper.Tempfile = *optTempfile
-	} else {
+	helper.Tempfile = *optTempfile
+	if helper.Tempfile == "" {
 		helper.Tempfile = fmt.Sprintf("/tmp/mackerel-plugin-redis-%s-%s", redisParam.PubRedisOpt.Addr, redisParam.SubRedisOpt.Addr)
 	}
-
-	if os.Getenv("MACKEREL_AGENT_PLUGIN_META") != "" {
-		helper.OutputDefinitions()
-	} else {
-		helper.OutputValues()
-	}
+	helper.Run()
 }
