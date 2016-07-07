@@ -88,15 +88,15 @@ func (m RedisPlugin) GraphDefinition() map[string](mp.Graphs) {
 
 func main() {
 
-	redisParam.Prefix = *flag.String("metric-key-prefix", redisParam.Prefix, "Metric key prefix")
-	redisParam.Message = *flag.String("msg", redisParam.Message, "publish message")
-	redisParam.PubRedisOpt.Password = *flag.String("pubpassword", redisParam.PubRedisOpt.Password, "redis pub password (default:\"\")")
-	redisParam.PubRedisOpt.Addr = *flag.String("pubaddr", redisParam.PubRedisOpt.Addr, "redis pub address ")
-	redisParam.PubRedisOpt.DB = *flag.Int("pubdb", redisParam.PubRedisOpt.DB, "redis pub db number (default: 0)")
-	redisParam.SubRedisOpt.Password = *flag.String("subpassword", redisParam.SubRedisOpt.Password, "redis sub password (default:\"\")")
-	redisParam.SubRedisOpt.Addr = *flag.String("subaddr", redisParam.SubRedisOpt.Addr, "redis sub address ")
-	redisParam.SubRedisOpt.DB = *flag.Int("subdb", redisParam.SubRedisOpt.DB, "redis sub db number (default: 0)")
-	redisParam.ChannelName = *flag.String("n", redisParam.ChannelName, "channel name")
+	flag.StringVar(&redisParam.Prefix, "metric-key-prefix", redisParam.Prefix, "Metric key prefix")
+	flag.StringVar(&redisParam.Message, "msg", redisParam.Message, "publish message")
+	flag.StringVar(&redisParam.PubRedisOpt.Password, "pubpassword", redisParam.PubRedisOpt.Password, "redis pub password (default:\"\")")
+	flag.StringVar(&redisParam.PubRedisOpt.Addr, "pubaddr", redisParam.PubRedisOpt.Addr, "redis pub address ")
+	flag.IntVar(&redisParam.PubRedisOpt.DB, "pubdb", redisParam.PubRedisOpt.DB, "redis pub db number (default: 0)")
+	flag.StringVar(&redisParam.SubRedisOpt.Password, "subpassword", redisParam.SubRedisOpt.Password, "redis sub password (default:\"\")")
+	flag.StringVar(&redisParam.SubRedisOpt.Addr, "subaddr", redisParam.SubRedisOpt.Addr, "redis sub address ")
+	flag.IntVar(&redisParam.SubRedisOpt.DB, "subdb", redisParam.SubRedisOpt.DB, "redis sub db number (default: 0)")
+	flag.StringVar(&redisParam.ChannelName, "n", redisParam.ChannelName, "channel name")
 	optTempfile := flag.String("tempfile", "", "Temp file name")
 	flag.Parse()
 
